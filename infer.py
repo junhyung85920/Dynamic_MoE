@@ -8,7 +8,7 @@ from modeling.configuration_moe import MoEConfig
 def generate(tokenizer, model, text):
     inputs = [text]
     tokens = tokenizer(inputs,return_tensors="pt")
-    input_ids = tokens.input_ids.cuda()
+    input_ids = tokens.input_ids
     generate_ids = model.generate(inputs=input_ids,
                 num_beams=1, 
                 bos_token_id=tokenizer.bos_token_id,
@@ -22,7 +22,7 @@ def generate(tokenizer, model, text):
     
 
 if __name__ == "__main__":
-    model_path = 'path_to_dynamicmoe_moedel'
+    model_path = "AnLan577/Dynamic_MoE" # path to the model (huggingface model hub)
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     tokenizer.pad_token = tokenizer.unk_token
 
@@ -33,7 +33,7 @@ if __name__ == "__main__":
         config=model_config,
         torch_dtype=torch.bfloat16,
         low_cpu_mem_usage=True
-    ).cuda()    
+    )   
     model.eval() 
 
     response = generate(tokenizer, model, 'The highest mountain in the world is')
