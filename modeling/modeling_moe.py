@@ -154,7 +154,10 @@ class LlamaMLP(nn.Module):
     def forward(self, x):
         return self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
 
-def top_p_sampling_batched_all_sequence(logits, top_p=0.9, temperature=1.0):
+cumulative_sum = 0.0
+cnt = 0
+
+def top_p_sampling_batched_all_sequence(logits, top_p=0.4, temperature=1.0):
     """
     Apply Top-p sampling to every element in the sequence for each item in the batch.
     Returns the selected token indices and the corresponding threshold indices.
@@ -180,6 +183,22 @@ def top_p_sampling_batched_all_sequence(logits, top_p=0.9, temperature=1.0):
     threshold_indices = mask.long().argmax(dim=-1)
     threshold_mask = torch.nn.functional.one_hot(threshold_indices, num_classes=sorted_indices.size(-1)).bool()
     
+    # Print the number of expert tokens selected for each position in the sequence
+
+    global cumulative_sum
+    global cnt
+
+    cumulative_sum += threshold_indices.tolist()[0][0] + 1
+    cnt += 1
+
+    print("\n\n")
+    print("num of experts: ", threshold_indices.tolist()[0][0] + 1)
+    print("cumulative sum: ", cumulative_sum)
+    print("cnt: ", cnt)
+    print("average: ", cumulative_sum / cnt)
+    print("\n\n")
+    
+
     mask = mask & ~threshold_mask
     sorted_indices = torch.where(mask, -1, sorted_indices)
     sorted_probs = torch.where(mask, 0.0, sorted_probs)   
