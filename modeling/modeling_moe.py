@@ -19,6 +19,7 @@
 # limitations under the License.
 """ PyTorch LLaMA model."""
 import math
+import pandas as pd
 from typing import List, Optional, Tuple, Union
 import torch
 import torch.utils.checkpoint
@@ -156,8 +157,11 @@ class LlamaMLP(nn.Module):
 
 cumulative_sum = 0.0
 cnt = 0
+layer_num = 24
+int_array = [0] * layer_num
 
-def top_p_sampling_batched_all_sequence(logits, top_p=0.4, temperature=1.0):
+
+def top_p_sampling_batched_all_sequence(logits, layer_idx, top_p=0.4, temperature=1.0):
     """
     Apply Top-p sampling to every element in the sequence for each item in the batch.
     Returns the selected token indices and the corresponding threshold indices.
@@ -168,7 +172,9 @@ def top_p_sampling_batched_all_sequence(logits, top_p=0.4, temperature=1.0):
     :return: Tuple of tensors (selected token indices, threshold indices) for each position in each sequence in the batch
     """
     # Apply temperature
-    logits = logits / temperature
+    # print("logits: ", logits)
+    # logits = logits / temperature
+    # print("logits after temperature: ", logits)
     
     # Convert logits to probabilities
     # probabilities = torch.softmax(logits, dim=-1)
@@ -182,7 +188,8 @@ def top_p_sampling_batched_all_sequence(logits, top_p=0.4, temperature=1.0):
     # Find the threshold indices
     threshold_indices = mask.long().argmax(dim=-1)
     threshold_mask = torch.nn.functional.one_hot(threshold_indices, num_classes=sorted_indices.size(-1)).bool()
-    
+
+
     # Print the number of expert tokens selected for each position in the sequence
 
     global cumulative_sum
@@ -191,13 +198,41 @@ def top_p_sampling_batched_all_sequence(logits, top_p=0.4, temperature=1.0):
     cumulative_sum += threshold_indices.tolist()[0][0] + 1
     cnt += 1
 
+    int_array[layer_idx] += threshold_indices.tolist()[0][0] + 1
+
     print("\n\n")
+    print(layer_idx, "번째 layer의 activated expert num: ", threshold_indices.tolist()[0][0] + 1)
+    print("layer number: ", layer_idx)
     print("num of experts: ", threshold_indices.tolist()[0][0] + 1)
     print("cumulative sum: ", cumulative_sum)
     print("cnt: ", cnt)
-    print("average: ", cumulative_sum / cnt)
+    print("average: ", f"{cumulative_sum / cnt:.3f}")
     print("\n\n")
-    
+    if(layer_idx == (layer_num - 1)):
+        average_expert_num_array = [0] * layer_num
+        for idx in range(layer_num):
+            average_expert_num_array[idx] = f"{int_array[idx] / (cnt / layer_num):.3f}"
+            print("activated expert num[",idx, "번째]: ", average_expert_num_array[idx])
+        print("\n\n")
+        
+        # load excel file
+        if(cnt == layer_num):
+            table = pd.DataFrame(
+                {
+                    "activated expert num": average_expert_num_array
+                }
+            )
+            table.to_excel("activated_expert_num.xlsx", index=False)
+        else:
+            filename = "activated_expert_num.xlsx"
+
+            table = pd.read_excel(filename)
+            table["activated expert num"] = average_expert_num_array
+            table.to_excel(filename, index=False)
+
+
+
+
 
     mask = mask & ~threshold_mask
     sorted_indices = torch.where(mask, -1, sorted_indices)
@@ -210,7 +245,7 @@ class SwitchMLP(nn.Module):
     """
     def __init__(self, config, layer_idx):
         super(SwitchMLP, self).__init__()
-        self.layer_num = layer_idx
+        self.layer_idx = layer_idx
         self.use_switch = (layer_idx % config.expert_frequency) == 0 # Ensure the first layer use switch mlp
         if self.use_switch:
             self.top_p_threshold = config.top_p_threshold
@@ -235,7 +270,7 @@ class SwitchMLP(nn.Module):
         route = torch.nn.functional.softmax(route, dim=2)
         
 
-        topk_weights, topk_ind = top_p_sampling_batched_all_sequence(route, self.top_p_threshold)
+        topk_weights, topk_ind = top_p_sampling_batched_all_sequence(route, self.layer_idx, self.top_p_threshold)
         
 
         hidden_states = hidden_states.view(-1, hidden_states.size(2)) 
@@ -410,6 +445,7 @@ class LlamaDecoderLayer(nn.Module):
 
         if use_cache:
             outputs += (present_key_value,)
+        
 
         return outputs
 LLAMA_START_DOCSTRING = r"""
@@ -689,6 +725,9 @@ class MoEModel(MoEPreTrainedModel):
             all_hidden_states += (hidden_states,)
 
         next_cache = next_decoder_cache if use_cache else None
+
+        print("hidden_states: ", hidden_states)
+
         if not return_dict:
             return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns] if v is not None)
         return BaseModelOutputWithPast(
@@ -703,26 +742,31 @@ class MoEForCausalLM(MoEPreTrainedModel):
         super().__init__(config)
         self.model = MoEModel(config)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
-
         # Initialize weights and apply final processing
         self.post_init()
 
     def get_input_embeddings(self):
+        print("get_input_embeddings")
         return self.model.embed_tokens
 
     def set_input_embeddings(self, value):
+        print("set_input_embeddings")
         self.model.embed_tokens = value
 
     def get_output_embeddings(self):
+        print("get_output_embeddings")
         return self.lm_head
 
     def set_output_embeddings(self, new_embeddings):
+        print("set_output_embeddings")
         self.lm_head = new_embeddings
 
     def set_decoder(self, decoder):
+        print("set_decoder")
         self.model = decoder
 
     def get_decoder(self):
+        print("get_decoder")
         return self.model
 
     @add_start_docstrings_to_model_forward(LLAMA_INPUTS_DOCSTRING)
@@ -765,7 +809,6 @@ class MoEForCausalLM(MoEPreTrainedModel):
         >>> tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
         "Hey, are you consciours? Can you talk to me?\nI'm not consciours, but I can talk to you."
         ```"""
-
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -803,6 +846,8 @@ class MoEForCausalLM(MoEPreTrainedModel):
         if not return_dict:
             output = (logits,) + outputs[1:]
             return (loss,) + output if loss is not None else output
+
+        print("logits: ", logits)
 
         return CausalLMOutputWithPast(
             loss=loss,
