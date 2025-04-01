@@ -59,9 +59,12 @@ if __name__ == "__main__":
 
     # draw graph (x: layer, y: activated expert number)
     
-    plt.plot(table['activated_expert_num'])
-    plt.xlabel('layer')
-    plt.ylabel('activated_expert_num')
-    plt.title('Activated Expert Number')
-    plt.show()
     
+    plt.plot(table['activated expert num'])
+    plt.xlabel('Layer Number')
+    plt.ylabel('Activated Experts')
+    plt.title('Activated Experts per Layer')
+    plt.show()
+
+    # save the graph
+    plt.savefig('Activated Experts per Layer.png')
