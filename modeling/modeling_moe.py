@@ -212,7 +212,7 @@ def top_p_sampling_batched_all_sequence(logits, layer_idx, top_p=0.4, temperatur
         average_expert_num_array = [0] * layer_num
         for idx in range(layer_num):
             average_expert_num_array[idx] = f"{int_array[idx] / (cnt / layer_num):.3f}"
-            print("activated expert num[",idx, "번째]: ", average_expert_num_array[idx])
+            print(f"activated expert num[{idx:2d}번째]: ", average_expert_num_array[idx])
         print("\n\n")
         
         # load excel file
