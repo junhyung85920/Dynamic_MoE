@@ -11,8 +11,7 @@ from modeling.configuration_llama_moe import LlamaMoEConfig
 def generate(tokenizer, model, text):
     inputs = [text]
     tokens = tokenizer(inputs,return_tensors="pt")
-    #tokens = tokens.to("cpu") # use CPU
-    #tokens = tokens.to("mps") # use GPU
+    tokens = tokens.to(device)
     input_ids = tokens.input_ids
     generate_ids = model.generate(inputs=input_ids,
                 num_beams=1, 
@@ -27,21 +26,28 @@ def generate(tokenizer, model, text):
     
 
 if __name__ == "__main__":
-    model_path = "AnLan577/Dynamic_MoE" # path to the model (huggingface model hub)
+    model_path1 = "AnLan577/Dynamic_MoE" # path to the model (huggingface model hub)
     #model_path = "llama-moe/LLaMA-MoE-v1-3_5B-2_8"
+    model_path2 = "llama-moe/LLaMA-MoE-v1-3_5B-4_16"
     #model_path = "ModelCloud/tinyllama-15M-stories"
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    print("MPS available:", torch.backends.mps.is_available())
+    print("Loading model from", model_path1)
+    tokenizer = AutoTokenizer.from_pretrained(model_path1)
+    print("Loading tokenizer from", model_path1)
     tokenizer.pad_token = tokenizer.unk_token
     #llama_model_config = LlamaMoEConfig.from_pretrained(model_path)
-    model_config = MoEConfig.from_pretrained(model_path)
+    model_config = MoEConfig.from_pretrained(model_path1)
+    print("Loading model config from", model_path1)
     model = MoEForCausalLM.from_pretrained(
-        model_path,
+        model_path1,
         from_tf=False,
         config=model_config,
-        torch_dtype=torch.bfloat16,
+        torch_dtype=torch.float16,
         low_cpu_mem_usage=True
     )
     model.eval()
+    device = torch.device("mps")
+    model = model.to(device)
     #model = model.to("cpu")
     #model = model.to("mps") # use GPU
     # model_config = AutoConfig.from_pretrained(model_path,trust_remote_code=True)

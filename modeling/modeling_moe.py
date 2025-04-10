@@ -477,17 +477,22 @@ class MoEPreTrainedModel(PreTrainedModel):
     _keys_to_ignore_on_load_unexpected = [r"decoder\.version"]
 
     def _init_weights(self, module):
+        print("init weights")
         std = self.config.initializer_range
+        print("std: ", std)
         if isinstance(module, nn.Linear):
+            print("linear")
             module.weight.data.normal_(mean=0.0, std=std)
             if module.bias is not None:
                 module.bias.data.zero_()
         elif isinstance(module, nn.Embedding):
+            print("embedding")
             module.weight.data.normal_(mean=0.0, std=std)
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
 
     def _set_gradient_checkpointing(self, module, value=False):
+        print("set gradient checkpointing")
         if isinstance(module, LlamaModel):
             module.gradient_checkpointing = value
 
@@ -739,11 +744,16 @@ class MoEModel(MoEPreTrainedModel):
 
 class MoEForCausalLM(MoEPreTrainedModel):
     def __init__(self, config):
+        print("MoEForCausalLM")
         super().__init__(config)
+        print("super().__init__(config)")
         self.model = MoEModel(config)
+        print("self.model = MoEModel(config)")
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        print("self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)")
         # Initialize weights and apply final processing
         self.post_init()
+        print("self.post_init()")
 
     def get_input_embeddings(self):
         print("get_input_embeddings")
@@ -809,6 +819,7 @@ class MoEForCausalLM(MoEPreTrainedModel):
         >>> tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
         "Hey, are you consciours? Can you talk to me?\nI'm not consciours, but I can talk to you."
         ```"""
+        print("MoEForCausalLM forward")
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
